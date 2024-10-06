@@ -1,0 +1,21 @@
+# Define seetings as show bellow
+# Name, IP, port 1, port 2, port 3, SUs
+
+# Name   - your node name, can be anything, for post-service use the name of .key file
+# IP   - node or service IP sddress
+# Port 1 - default for the node: 9092
+# Port 2 - default for the node: 9093
+# Port 3 - default for the node: 9094 ,or port for the Post service, for example 50001
+# SU     - Can be found in postdata-metadata.json defined as "NumUnits". 
+
+# If SU in POS line is missing, the progress of reading the disk will not be displayed.
+
+#Examples:
+#Node1, 192.168.1.6, 9092, 9093, 9094
+#pos1, 192.168.1.6, 0, 0, 50001, 40 # In shis example the key file named pos1.key
+
+node-test, 192.168.1.6, 9092, 9093, 9094
+smh01, 192.168.1.6, 0, 0, 50001, 40
+smh02, 192.168.1.6, 0, 0, 50002, 80
+smh03, 192.168.1.6, 0, 0, 50003, 120
+smh04, 192.168.1.6, 0, 0, 50004, 160
