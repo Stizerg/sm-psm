@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="1.00"
+version="1.01"
 
 #Starts/stops all services for a test. Doesn't run during cycle gap
 test=0 # Set to 1 to test.
@@ -16,7 +16,7 @@ log_levels='{
     "3": "INFO",
     "4": "DEBUG"
 }'
-log_file="./sm-psm.log"
+log_file="./logs/sm-psm.log"
 
 # Configuration file
 ConfigFile="sm-psm-config.txt"
@@ -32,6 +32,13 @@ function send_log {
     local log_message
     local message=$2
     local message_log_level=$1
+    
+    # Check if jq is installed
+    if ! command -v jq &> /dev/null; then
+        echo "FATAL: jq is not installed." >&2
+        read -n 1 -s -r -p "Press any key to continue ..."
+	exit 1
+    fi
     local log_level=$(echo $log_levels | jq -r ".[\"$message_log_level\"]")    
 
     if (( $message_log_level <= $psm_log_level )); then
@@ -101,8 +108,7 @@ function check_grpcurl {
         grpcurl_path=$(which grpcurl)
 
         if [ -z "$grpcurl_path" ]; then
-            echo -e "\e[31mFatal error: grpcurl not found.\e[0m"
-            send_log 0 "FATAL: grpcurl not found"
+            send_log 0 "grpcurl not found"
             read -n 1 -s -r -p "Press any key to continue ..."
             exit 1
         else
@@ -121,7 +127,7 @@ function check_node_status {
     
     if [ $exit_code -ne 0 ]; then
     	check_grpcurl=4
-        send_log 1 "Failed to get node status. Error: $response"
+        send_log 1 "Failed to get node status =${node_config[name]}=. Error: $response"
         return 1
     fi
     
@@ -129,10 +135,10 @@ function check_node_status {
     is_synced=$(echo "$response" | jq -r '.status.isSynced')
     
     if [ "$is_synced" = "true" ]; then
-        send_log 3 "Node is synced"
+        send_log 3 "Node is synced =${node_config[name]}="
         return 0
     else
-        send_log 2 "Node is not synced"
+        send_log 2 "Node is not synced =${node_config[name]}="
         return 1
     fi
 }
