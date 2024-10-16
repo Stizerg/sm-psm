@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="1.01"
+version="1.02"
 
 #Starts/stops all services for a test. Doesn't run during cycle gap
 test=0 # Set to 1 to test.
@@ -18,6 +18,9 @@ log_levels='{
 }'
 log_file="./logs/sm-psm.log"
 
+# Set the path to the local grpcurl copy or make sure it's installed
+grpcurl="./grpcurl"
+
 # Configuration file
 ConfigFile="sm-psm-config.txt"
 
@@ -32,13 +35,7 @@ function send_log {
     local log_message
     local message=$2
     local message_log_level=$1
-    
-    # Check if jq is installed
-    if ! command -v jq &> /dev/null; then
-        echo "FATAL: jq is not installed." >&2
-        read -n 1 -s -r -p "Press any key to continue ..."
-	exit 1
-    fi
+
     local log_level=$(echo $log_levels | jq -r ".[\"$message_log_level\"]")    
 
     if (( $message_log_level <= $psm_log_level )); then
@@ -99,16 +96,28 @@ function load_configuration {
     send_log 4 "Services processing order: ${service_order[*]}"
 }
 
-function check_grpcurl {
-    # Set the path to the local grpcurl copy
-    grpcurl="./grpcurl"
+function req_check {
+    # requirements check
+    
+    # Check if jq is installed
+    if ! command -v jq &> /dev/null; then
+        echo "FATAL: jq is not installed."
+        read -n 1 -s -r -p "Press any key to continue ..."
+        exit 1
+    fi
+    # Check if curl is installed
+    if ! command -v curl &> /dev/null; then
+        echo "FATAL: curl is not installed"
+        read -n 1 -s -r -p "Press any key to continue ..."
+        exit 1
+    fi
     
     # Check if the local grpcurl exists
     if [ ! -f "$grpcurl" ]; then
         grpcurl_path=$(which grpcurl)
 
         if [ -z "$grpcurl_path" ]; then
-            send_log 0 "grpcurl not found"
+            echo "FATAL: grpcurl not found"
             read -n 1 -s -r -p "Press any key to continue ..."
             exit 1
         else
@@ -241,7 +250,7 @@ function check_service_status {
 					if [ "$su" -eq 0 ]; then
 						send_log 3 "Service $service_name is proving disk"
     				else
-    					percent=$(bc <<< "scale=0; ($position / ($su * 68719476736)) * 100")
+    					percent=$(bc <<< "scale=2; (($position * 100) / ($su * 68719476736))")
     					send_log 3 "Service $service_name is proving disk, progress: $percent%"
     				fi
                     echo "Proving_Disk"
@@ -366,6 +375,7 @@ function manage_services {
     local node_proving_count=0 
     local node_idle_count=0
     local services_proving_count=0
+    local services_proving_disk_count=0
     local services_idle_count=0
     local services_offline_count=0
     
@@ -451,18 +461,18 @@ function manage_services {
 		send_log 4 "----------------------------------------"
     done
     
-    send_log 3 "Node reported - Proving: $node_proving_count, Idle: $node_idle_count"
-    send_log 3 "POST services - Proving: $services_proving_count, Idle: $services_idle_count, Offline: $services_offline_count"
-    
     total_active_services=$((services_proving_count + services_proving_disk_count))
-    send_log 4 "Total active services: $total_active_services"
+    send_log 3 "Node reported - Proving: $node_proving_count, Idle: $node_idle_count"
+    send_log 3 "POST services - Proving: $total_active_services, Idle: $services_idle_count, Offline: $services_offline_count"
+    
     return $node_proving_count
 }
 
 function main {    
-    send_log 3 "Starting sm-psm...(version $version)"
+    echo "Starting sm-psm...(version $version)"
+    req_check
     load_configuration
-    check_grpcurl
+    
     
     while true; do
         if check_node_status; then
