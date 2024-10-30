@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="1.02"
+version="1.03"
 
 #Starts/stops all services for a test. Doesn't run during cycle gap
 test=0 # Set to 1 to test.
@@ -101,7 +101,7 @@ function req_check {
     
     # Check if jq is installed
     if ! command -v jq &> /dev/null; then
-        echo "FATAL: jq is not installed."
+        echo "FATAL: jq is not installed." >&2
         read -n 1 -s -r -p "Press any key to continue ..."
         exit 1
     fi
@@ -214,16 +214,20 @@ function check_service_status {
         case "$response" in
             "Idle")
                 echo "IDLE"
+                rm -f "/tmp/${service_name}_prev_data"
                 ;;
             "DoneProving")
-            	echo "DONE"
-            	;;
+                echo "DONE"
+                rm -f "/tmp/${service_name}_prev_data"
+                ;;
             "Proving")
                 echo "Proving_POW"
+                rm -f "/tmp/${service_name}_prev_data"
                 ;;
             *)
                 send_log 2 "Unknown status for ${service_name}: ${response}"
                 echo "UNKNOWN"
+                rm -f "/tmp/${service_name}_prev_data"
                 ;;
         esac
     else
@@ -235,6 +239,7 @@ function check_service_status {
         if [ $jq_exit_code -ne 0 ]; then
             send_log 2 "Invalid JSON response for ${service_name}: ${response}"
             echo "UNKNOWN"
+            rm -f "/tmp/${service_name}_prev_data"
         else
             # Valid JSON response
             if echo "$parsed_response" | jq -e 'has("Proving")' > /dev/null; then
@@ -243,24 +248,43 @@ function check_service_status {
                 if [ "$position" = "null" ]; then
                     send_log 2 "Invalid Proving status for ${service_name}: position is null"
                     echo "UNKNOWN"
+                    rm -f "/tmp/${service_name}_prev_data"
                 elif (( position > 0 )); then
-					
-					local percent
-					send_log 4 "SU of $service_name: $su"
-					if [ "$su" -eq 0 ]; then
-						send_log 3 "Service $service_name is proving disk"
-    				else
-    					percent=$(bc <<< "scale=2; (($position * 100) / ($su * 68719476736))")
-    					send_log 3 "Service $service_name is proving disk, progress: $percent%"
-    				fi
+                    local percent
+                    send_log 4 "SU of $service_name: $su"
+                    if [ "$su" -eq 0 ]; then
+                        send_log 3 "Service $service_name is proving disk"
+                    else
+                        percent=$(bc <<< "scale=2; (($position * 100) / ($su * 68719476736))")
+                        
+                        # Calculate disk reading speed
+                        local current_time=$(date +%s)
+                        local prev_time prev_position
+                        if [ -f "/tmp/${service_name}_prev_data" ]; then
+                            read prev_time prev_position < "/tmp/${service_name}_prev_data"
+                            local time_diff=$((current_time - prev_time))
+                            local position_diff=$((position - prev_position))
+                            if [ $time_diff -gt 0 ]; then
+                                local speed=$(bc <<< "scale=2; ($position_diff / $time_diff) / (1024 * 1024)")
+                                send_log 3 "Service $service_name is proving disk, progress: $percent%, speed: ${speed} MB/s"
+                            else
+                                send_log 3 "Service $service_name is proving disk, progress: $percent%"
+                            fi
+                        else
+                            send_log 3 "Service $service_name is proving disk, progress: $percent%"
+                        fi
+                        echo "$current_time $position" > "/tmp/${service_name}_prev_data"
+                    fi
                     echo "Proving_Disk"
                 else
-                	send_log 3 "Service $service_name is proving POW"
+                    send_log 3 "Service $service_name is proving POW"
                     echo "Proving_POW"
+                    rm -f "/tmp/${service_name}_prev_data"
                 fi
             else
                 send_log 1 "Unknown status for ${service_name}: ${parsed_response}"
                 echo "UNKNOWN"
+                rm -f "/tmp/${service_name}_prev_data"
             fi
         fi
     fi
