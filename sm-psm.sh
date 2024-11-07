@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="1.03"
+version="1.04"
 
 #Starts/stops all services for a test. Doesn't run during cycle gap
 test=0 # Set to 1 to test.
@@ -314,6 +314,7 @@ function start_service {
     send_log 4 "Using startup script: ${startup_script}"
     
     # Execute the startup script
+    	#screen -dmS "${service_name}" bash -c " # you can use screen instead of terminal to run all post services - Thanks sandervale for testing
 	gnome-terminal --title="${service_name}" -- bash -c "
         ${startup_script};
         echo \$? > /tmp/${base_name}.exit_status
